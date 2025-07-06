@@ -1,48 +1,81 @@
 const mongoose = require('mongoose');
-const Schema = mongoose.Schema;
 
-const auditLogSchema = new Schema({
-    userId: { // Can be null if action is system-generated or by an unauthenticated user (if applicable)
-        type: Schema.Types.ObjectId,
-        ref: 'User',
-        index: true
-    },
-    email: { // Denormalized for easier querying without populating user, especially if user is deleted
-        type: String,
-        trim: true,
-        lowercase: true
-    },
-    domain: { // Denormalized for easier querying
-        type: String,
-        trim: true,
-        lowercase: true,
-        index: true
-    },
-    action: {
-        type: String,
-        required: true,
-        trim: true,
-        index: true
-    },
-    targetId: { // ID of the entity being acted upon (e.g., Post ID, User ID)
-        type: Schema.Types.ObjectId,
-        index: true
-    },
-    metadata: { // Flexible field for additional information, like IP address, old/new values, etc.
-        type: Schema.Types.Mixed
-    },
-    timestamp: { // Specific timestamp for the audit event, separate from document creation time
-        type: Date,
-        default: Date.now,
-        index: true
+const AuditLogSchema = new mongoose.Schema({
+  user: { // User who performed the action. Can be null if action is pre-auth (e.g. failed login attempt)
+    type: mongoose.Schema.ObjectId,
+    ref: 'User',
+    index: true,
+  },
+  action: { // e.g., 'USER_LOGIN', 'CREATE_POST', 'UPDATE_DOMAIN', 'ASSIGN_ROLE'
+    type: String,
+    required: true,
+    trim: true,
+    uppercase: true,
+    index: true,
+  },
+  targetType: { // Optional: The type of entity affected e.g., 'Post', 'User', 'Domain'
+    type: String,
+    trim: true,
+    // enum: ['Post', 'User', 'Domain', 'Auth', 'System'] // Example enum
+  },
+  targetId: { // Optional: The ID of the entity affected
+    type: mongoose.Schema.ObjectId,
+    refPath: 'targetType', // Dynamically references based on targetType
+  },
+  organization: { // Optional: Organization context of the user or action
+    type: String,
+    trim: true,
+    index: true,
+  },
+  details: { // Additional information, like changed fields, parameters, error messages
+    type: mongoose.Schema.Types.Mixed, // Allows for flexible object storage
+  },
+  ipAddress: {
+    type: String,
+  },
+  userAgent: { // Browser/client info
+    type: String,
+  },
+  statusCode: { // HTTP status code of the response related to this action
+      type: Number
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+    index: true,
+  },
+});
+
+// Compound index for common filtering
+AuditLogSchema.index({ organization: 1, timestamp: -1 });
+AuditLogSchema.index({ action: 1, timestamp: -1 });
+AuditLogSchema.index({ user: 1, action: 1, timestamp: -1 });
+
+
+// Helper function to create log (can be called from middleware or services)
+// Static method on the schema
+AuditLogSchema.statics.createLog = async function(logData) {
+    try {
+        // Sanitize or select details to log if necessary
+        const logEntry = {
+            user: logData.user || null,
+            action: logData.action,
+            targetType: logData.targetType,
+            targetId: logData.targetId,
+            organization: logData.organization,
+            details: logData.details || {},
+            ipAddress: logData.ipAddress,
+            userAgent: logData.userAgent,
+            statusCode: logData.statusCode,
+            timestamp: logData.timestamp || Date.now()
+        };
+        await this.create(logEntry);
+    } catch (error) {
+        console.error('Failed to create audit log:', error);
+        // Decide how to handle logging failure (e.g., log to console, another service)
+        // Avoid letting audit log failure break the main application flow if possible.
     }
-}, { timestamps: { createdAt: true, updatedAt: false } }); // Document createdAt, but main time is 'timestamp'
+};
 
-// Indexes
-// Compound indexes can be added based on common query patterns, e.g.:
-// auditLogSchema.index({ action: 1, timestamp: -1 });
-// auditLogSchema.index({ userId: 1, action: 1, timestamp: -1 });
 
-const AuditLog = mongoose.model('AuditLog', auditLogSchema);
-
-module.exports = AuditLog;
+module.exports = mongoose.model('AuditLog', AuditLogSchema);
