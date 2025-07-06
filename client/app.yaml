@@ -1,0 +1,63 @@
+# This app.yaml is for the frontend React service
+
+runtime: nodejs20 # Use a Node.js runtime to serve static files with Express
+service: frontend # Name this service 'frontend'
+instance_class: F1 # Basic instance class is usually sufficient for serving static files
+
+env_variables:
+  NODE_ENV: 'production'
+  # This variable is used by Create React App at BUILD TIME.
+  # If using dispatch.yaml to route /api/* to the backend service from the same domain,
+  # setting REACT_APP_API_URL to '/api' allows the frontend to make relative API calls
+  # like fetch('/api/users'). The browser prepends the current domain.
+  # Example: If app is at https://example.com, fetch('/api/users') goes to https://example.com/api/users.
+  # Dispatch.yaml then routes this to the backend service.
+  #
+  # If you are NOT using dispatch.yaml, or if the backend is on a completely different domain,
+  # you MUST set the full absolute URL of your backend API here.
+  # e.g., REACT_APP_API_URL: 'https://api-dot-your-project-id.appspot.com/api'
+  #
+  # For this setup, we assume dispatch.yaml is used, so '/api' is appropriate.
+  # This value will be baked into your static frontend assets during `npm run build`.
+  REACT_APP_API_URL: '/api'
+
+handlers:
+  # All requests are handled by the Node.js script (server.js)
+  # which serves the static files from the 'build' directory.
+  - url: /.*
+    script: auto
+    secure: always # Redirect HTTP to HTTPS
+
+# Automatic scaling settings for a static serving frontend can be minimal
+automatic_scaling:
+  min_instances: 0
+  max_instances: 1 # Adjust if higher traffic is expected
+  min_idle_instances: automatic
+  max_idle_instances: automatic
+  max_concurrent_requests: 80 # Default is 10, can be higher for static content
+
+# This service requires a `server.js` file in the `client` directory to serve static assets,
+# and `express` as a dependency in `client/package.json`.
+# The `client/package.json` should have:
+# "dependencies": {
+#   "express": "^4.17.1", // Or similar version
+#   ...other dependencies
+# },
+# "scripts": {
+#   "start": "node server.js", // This script is run by App Engine
+#   "dev": "react-scripts start", // For local development
+#   "build": "react-scripts build", // Creates the 'build' folder
+#   ...
+# }
+
+# Deployment steps for this service (assuming you are in the project root):
+# 1. Navigate to the client directory: `cd client`
+# 2. Ensure dependencies are installed: `npm install` (if you added express manually)
+# 3. Build the React app: `npm run build` (this creates the `client/build` folder)
+# 4. Deploy from the client directory: `gcloud app deploy app.yaml`
+#    Alternatively, from the project root: `gcloud app deploy client/app.yaml`
+#
+# The `gcp-build` script in `package.json` is automatically run by GCP Buildpacks if it exists.
+# If not, `npm run build` is a common convention that buildpacks might also look for.
+# The Node.js buildpack for App Engine Standard will run `npm run build` if it's in your `scripts`.
+# The `build` directory must exist when `npm start` (i.e., `node server.js`) is run by App Engine.
